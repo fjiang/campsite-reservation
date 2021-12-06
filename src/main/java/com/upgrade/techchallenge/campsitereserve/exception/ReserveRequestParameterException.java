@@ -10,7 +10,11 @@ public class ReserveRequestParameterException extends CampsiteReserveException {
     private final Map<String, String> fieldErrors;
 
     public ReserveRequestParameterException(String message, Map<String, String> fieldErrors) {
-        super(message, HttpStatus.BAD_REQUEST);
+        this(message, null, fieldErrors);
+    }
+
+    private ReserveRequestParameterException(String message, String innerMessage, Map<String, String> fieldErrors) {
+        super(message, innerMessage, HttpStatus.BAD_REQUEST);
         this.fieldErrors = fieldErrors;
         constructServiceError();
     }

@@ -38,7 +38,7 @@ public class ReserveRequest {
         } else if (DAYS.between(startDate, endDate) > 2) {
             throw new ReserveRequestParameterException(
                     "Validation error",
-                    Map.of("endDate", "End date can't be 3 days later than start date")
+                    Map.of("endDate", "End date can't be more than 3 days later than start date")
             );
         }
     }

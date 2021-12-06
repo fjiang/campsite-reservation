@@ -10,7 +10,11 @@ import java.util.Map;
 public class InternalServerException extends CampsiteReserveException {
 
     public InternalServerException(String message) {
-        super(message, HttpStatus.INTERNAL_SERVER_ERROR);
+        this(message, null);
+    }
+
+    public InternalServerException(String message, String innerMessage) {
+        super(message, innerMessage, HttpStatus.INTERNAL_SERVER_ERROR);
     }
 
     @Override

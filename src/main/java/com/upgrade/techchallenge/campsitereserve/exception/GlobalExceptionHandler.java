@@ -23,27 +23,37 @@ public class GlobalExceptionHandler {
     @ResponseStatus(HttpStatus.BAD_REQUEST)
     @ResponseBody
     @ExceptionHandler(MethodArgumentNotValidException.class)
-    public ServiceError400 methodArgumentNotValidException(final MethodArgumentNotValidException ex) {
+    public ServiceError400 methodArgumentNotValidException(MethodArgumentNotValidException ex) {
         final List<FieldError> fieldErrors = ex.getBindingResult().getFieldErrors();
         ServiceError400 serviceError400 = new ServiceError400("Validation error");
         for (FieldError fieldError: fieldErrors) {
             serviceError400.addError(fieldError.getField(), fieldError.getDefaultMessage());
         }
-        logError(serviceError400, ex);
+        logError(null, serviceError400, ex);
         return serviceError400;
     }
 
     @ResponseBody
     @ExceptionHandler(ReserveRequestParameterException.class)
-    public BaseServiceError reserveRequestParameterException(HttpServletResponse response,
-                                                            final ReserveRequestParameterException ex) {
-        logError(ex.getServiceError(), ex);
+    public BaseServiceError reserveRequestParameterException(HttpServletResponse response, ReserveRequestParameterException ex) {
+        logError(ex.getInnerMessage(), ex.getServiceError(), ex);
         response.setStatus(ex.getHttpStatus().value());
         return ex.getServiceError();
     }
 
-    private void logError(BaseServiceError serviceError, Exception ex) {
-        logger.error("Error Code {}, Error Message {}",
-                serviceError.getErrorCode(), serviceError.getErrorMessage(), ex);
+    @ResponseBody
+    @ExceptionHandler(InternalServerException.class)
+    public BaseServiceError internalServerException(HttpServletResponse response, InternalServerException ex) {
+        logError(ex.getInnerMessage(), ex.getServiceError(), ex);
+        response.setStatus(ex.getHttpStatus().value());
+        return ex.getServiceError();
+    }
+
+    private void logError(String innerMessage, BaseServiceError serviceError, Exception ex) {
+        if (innerMessage != null) {
+            logger.error(innerMessage);
+        }
+        logger.error("Error Code {}, Error Message {}, Track Id {}",
+                serviceError.getErrorCode(), serviceError.getErrorMessage(), serviceError.getTrackId(), ex);
     }
 }

@@ -7,7 +7,7 @@ import com.upgrade.techchallenge.campsitereserve.dto.DateAvailabilityRequest;
 import com.upgrade.techchallenge.campsitereserve.dto.ProcessingStatus;
 import com.upgrade.techchallenge.campsitereserve.dto.ReserveRequest;
 import com.upgrade.techchallenge.campsitereserve.dto.ReserveResponse;
-import com.upgrade.techchallenge.campsitereserve.error.ServiceError500;
+import com.upgrade.techchallenge.campsitereserve.error.ServiceError400;
 import com.upgrade.techchallenge.campsitereserve.exception.InternalServerException;
 import com.upgrade.techchallenge.campsitereserve.repository.DateAvailabilityRepository;
 import com.upgrade.techchallenge.campsitereserve.repository.UserRepository;
@@ -18,7 +18,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.ReadWriteLock;
@@ -79,28 +78,27 @@ public class CampsiteService {
             List<DateAvailability> dateAvailabilities = dateAvailabilityRepository.findDatesBetween(
                     CampsiteStatus.AVAILABLE, startDate, endDate);
             if (dateAvailabilities.size() - 1 != DAYS.between(startDate, endDate)) {
-                String errorMessage = "";
+                String errorMessage = "Date has already booked";
                 return new ReserveResponse(
-                        ProcessingStatus.FAILED, List.of(new ServiceError500(errorMessage)), null);
+                        ProcessingStatus.FAILED, List.of(new ServiceError400(errorMessage)), null);
             } else {
                 User user = userRepository.findOneByEmail(reserveRequest.getEmail());
                 if (user == null) {
                     user = new User(reserveRequest.getFirstName(),
                                     reserveRequest.getLastName(),
                                     reserveRequest.getEmail());
+                    userRepository.save(user);
                 }
                 String trackId = reserve(dateAvailabilities, user);
                 return new ReserveResponse(
                         ProcessingStatus.SUCCEEDED, null, trackId);
             }
         } catch (InterruptedException ex) {
-            String errorMessage = String.format("Interrupted reserving campsite - [%s]", reserveRequest);
-            logger.error(errorMessage, ex);
-            throw new InternalServerException("Interrupted reserving campsite");
+            String innerErrorMessage = String.format("Interrupted reserving campsite - [%s]", reserveRequest);
+            throw new InternalServerException("Interrupted reserving campsite", innerErrorMessage);
         } catch (Exception ex) {
             String errorMessage = "Internal error generated";
-            logger.error(errorMessage, ex);
-            throw new InternalServerException(errorMessage);
+            throw new InternalServerException(errorMessage, errorMessage);
         } finally {
             lock.writeLock().unlock();
         }
@@ -115,6 +113,13 @@ public class CampsiteService {
             dateAvailability.setBookingId(bookingId);
         }
         dateAvailabilityRepository.saveAll(dateAvailabilities);
+
+        logger.info("User info found with findByAvailability()");
+        logger.info("-----------------------------------------");
+        for (DateAvailability dateAvailabilityFetched : dateAvailabilityRepository.findAll()) {
+            logger.info(dateAvailabilityFetched.toString());
+        }
+        logger.info("");
         return bookingId;
     }
 }

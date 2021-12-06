@@ -17,24 +17,10 @@ public class User {
     private String firstName;
     private String lastName;
     private String email;
-    @OneToMany(mappedBy = "user")
-    private List<DateAvailability> dateAvailabilityList = new ArrayList<>();
-
-
 
     public User(String firstName, String lastName, String email) {
         this.firstName = firstName;
         this.lastName = lastName;
         this.email = email;
-    }
-
-    @Override
-    public String toString() {
-        return "User{" +
-                "id=" + id +
-                ", firstName='" + firstName + '\'' +
-                ", lastName='" + lastName + '\'' +
-                ", email='" + email + '\'' +
-                '}';
     }
 }

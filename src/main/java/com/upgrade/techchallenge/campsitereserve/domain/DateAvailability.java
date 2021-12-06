@@ -14,14 +14,15 @@ public class DateAvailability {
     @GeneratedValue(strategy = GenerationType.AUTO)
     private Long id;
     private LocalDate date;
-    private CampsiteStatus availability;
+    private String bookingId;
+    private CampsiteStatus campsiteStatus;
     @ManyToOne
     @JoinColumn(name="USER_ID")
     private User user;
 
-    public DateAvailability(LocalDate date, CampsiteStatus availability, User user) {
+    public DateAvailability(LocalDate date, CampsiteStatus campsiteStatus, User user) {
         this.date = date;
-        this.availability = availability;
+        this.campsiteStatus = campsiteStatus;
         this.user = user;
     }
 }

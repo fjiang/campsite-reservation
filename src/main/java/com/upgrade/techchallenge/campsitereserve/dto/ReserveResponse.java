@@ -1,20 +1,20 @@
 package com.upgrade.techchallenge.campsitereserve.dto;
 
-import lombok.Data;
+import com.fasterxml.jackson.annotation.JsonInclude;
+import com.upgrade.techchallenge.campsitereserve.error.BaseServiceError;
+import lombok.Getter;
+import lombok.Setter;
 
-import java.time.LocalDate;
+import java.util.List;
 
-@Data
-public class ReserveResponse {
+@Getter @Setter
+@JsonInclude(JsonInclude.Include.NON_EMPTY)
+public class ReserveResponse extends BaseResponse{
 
-    private Long trackId;
+    private String trackId;
 
-    private ReserveStatus status;
-
-    private LocalDate startDate;
-
-    private LocalDate endDate;
-
-
-
+    public ReserveResponse(ProcessingStatus processingStatus, List<BaseServiceError> errors, String trackId) {
+        super(processingStatus, errors);
+        this.trackId = trackId;
+    }
 }

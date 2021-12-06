@@ -1,5 +1,5 @@
 package com.upgrade.techchallenge.campsitereserve.dto;
 
-public enum ReserveStatus {
+public enum ProcessingStatus {
     SUCCEEDED, FAILED
 }

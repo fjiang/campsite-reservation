@@ -9,8 +9,8 @@ import java.util.Map;
 public class ReserveRequestParameterException extends CampsiteReserveException {
     private final Map<String, String> fieldErrors;
 
-    public ReserveRequestParameterException(String message, HttpStatus httpStatus, Map<String, String> fieldErrors) {
-        super(message, httpStatus);
+    public ReserveRequestParameterException(String message, Map<String, String> fieldErrors) {
+        super(message, HttpStatus.BAD_REQUEST);
         this.fieldErrors = fieldErrors;
         constructServiceError();
     }

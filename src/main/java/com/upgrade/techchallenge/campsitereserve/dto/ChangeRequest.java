@@ -1,10 +1,8 @@
 package com.upgrade.techchallenge.campsitereserve.dto;
 
 import com.upgrade.techchallenge.campsitereserve.exception.ReserveRequestParameterException;
-import io.swagger.annotations.ApiModelProperty;
 import lombok.Data;
 
-import javax.validation.constraints.Email;
 import javax.validation.constraints.Future;
 import javax.validation.constraints.NotNull;
 import java.time.LocalDate;
@@ -13,32 +11,21 @@ import java.util.Map;
 import static java.time.temporal.ChronoUnit.DAYS;
 
 @Data
-public class ReserveRequest {
+public class ChangeRequest {
     @NotNull
-    @ApiModelProperty(example = "feng")
-    private String firstName;
-
+    private ChangeReserveOperation changeReserveOperation;
     @NotNull
-    @ApiModelProperty(example = "jiang")
-    private String lastName;
-
-    @Email
-    @ApiModelProperty(example = "fjiang@upgrade.com")
-    private String email;
-
+    private String bookingId;
     @Future
-    @ApiModelProperty(example = "2021-12-10")
     private LocalDate startDate;
-
     @Future
-    @ApiModelProperty(example = "2021-12-15")
     private LocalDate endDate;
 
-    /**
-     * Custom validation to check rules for start and end date
-     * @throws ReserveRequestParameterException throws when request parameters validation error happens
-     */
     public void validate() throws ReserveRequestParameterException {
+        // Skip validation for cancel operation
+        if (changeReserveOperation == ChangeReserveOperation.CANCEL) {
+            return;
+        }
         if (startDate.isAfter(endDate)) {
             throw new ReserveRequestParameterException(
                   "Validation error",

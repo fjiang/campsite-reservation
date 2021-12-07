@@ -26,7 +26,7 @@ public class CampsiteReserveApplication {
 	}
 
 	@Bean
-	public CommandLineRunner demo(DateAvailabilityRepository dateAvailabilityRepository,
+	public CommandLineRunner init(DateAvailabilityRepository dateAvailabilityRepository,
 								  UserRepository userRepository) {
 		return (args) -> {
 			User user = new User("feng", "jiang", "abc.gmail.com");

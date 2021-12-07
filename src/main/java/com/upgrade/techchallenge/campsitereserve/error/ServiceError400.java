@@ -1,11 +1,12 @@
 package com.upgrade.techchallenge.campsitereserve.error;
 
-import lombok.Getter;
+import com.fasterxml.jackson.annotation.JsonInclude;
+import io.swagger.annotations.ApiModelProperty;
 
 import java.util.ArrayList;
 import java.util.List;
 
-@Getter
+@JsonInclude(JsonInclude.Include.NON_EMPTY)
 public class ServiceError400 extends BaseServiceError {
     private List<FieldError> errors = new ArrayList<>();
 
@@ -16,5 +17,17 @@ public class ServiceError400 extends BaseServiceError {
     public void addError(String field, String errorMessage) {
         FieldError error = new FieldError(field, errorMessage);
         errors.add(error);
+    }
+
+    @Override
+    @ApiModelProperty(example = "BAD_REQUEST")
+    public ErrorCode getErrorCode() {
+        return super.getErrorCode();
+    }
+
+    @Override
+    @ApiModelProperty(example = "must be a future date")
+    public String getErrorMessage() {
+        return super.getErrorMessage();
     }
 }

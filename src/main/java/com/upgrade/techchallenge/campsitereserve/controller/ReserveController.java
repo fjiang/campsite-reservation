@@ -1,12 +1,12 @@
 package com.upgrade.techchallenge.campsitereserve.controller;
 
-import com.upgrade.techchallenge.campsitereserve.dto.CampsiteAvailability;
-import com.upgrade.techchallenge.campsitereserve.dto.DateAvailabilityRequest;
-import com.upgrade.techchallenge.campsitereserve.dto.ReserveRequest;
-import com.upgrade.techchallenge.campsitereserve.dto.ReserveResponse;
+import com.upgrade.techchallenge.campsitereserve.dto.*;
+import com.upgrade.techchallenge.campsitereserve.error.ServiceError400;
+import com.upgrade.techchallenge.campsitereserve.error.ServiceError500;
 import com.upgrade.techchallenge.campsitereserve.exception.InternalServerException;
 import com.upgrade.techchallenge.campsitereserve.exception.ReserveRequestParameterException;
 import com.upgrade.techchallenge.campsitereserve.service.CampsiteService;
+import io.swagger.annotations.*;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
@@ -17,7 +17,12 @@ import javax.validation.Valid;
 import java.time.LocalDate;
 import java.util.List;
 
+/**
+ * Controller with 3 endpoints to check campsite availability,
+ * reserve campsite and change reservation.
+ */
 @RestController
+@Api(tags = "Campsite Reservation API")
 @RequestMapping(path="/campsite/")
 public class ReserveController {
 
@@ -25,8 +30,24 @@ public class ReserveController {
     private CampsiteService campsiteService;
 
     @GetMapping(path = "availability", produces = "application/json")
+    @ApiOperation(value = "Get available dates")
+    @ApiResponses(value = {
+            @ApiResponse(code = 200, message = "OK"),
+            @ApiResponse(code = 400, message = "Bad request", response = ServiceError400.class),
+            @ApiResponse(code = 500, message = "Internal server error", response = ServiceError500.class)
+    })
     public ResponseEntity<CampsiteAvailability> checkCampsiteAvailability(
+            @ApiParam(
+                    name = "startDate",
+                    type = "local date",
+                    value = "start date",
+                    example = "2021-12-10")
             @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) @RequestParam(value="startDate", required=false) LocalDate startDate,
+            @ApiParam(
+                    name = "endDate",
+                    type = "local date",
+                    value = "end date",
+                    example = "2021-12-15")
             @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) @RequestParam(value="endDate", required=false) LocalDate endDate
     ) throws InternalServerException {
         DateAvailabilityRequest dateAvailabilityRequest = new DateAvailabilityRequest();
@@ -37,10 +58,30 @@ public class ReserveController {
     }
 
     @PostMapping(path = "reserve", produces = "application/json")
+    @ApiOperation(value = "Reserve campsite")
+    @ApiResponses(value = {
+            @ApiResponse(code = 200, message = "OK"),
+            @ApiResponse(code = 400, message = "Bad request", response = ServiceError400.class),
+            @ApiResponse(code = 500, message = "Internal server error", response = ServiceError500.class)
+    })
     public ResponseEntity<ReserveResponse> reserve(
             @Valid @RequestBody ReserveRequest reserveRequest
     ) throws ReserveRequestParameterException, InternalServerException {
         reserveRequest.validate();
         return new ResponseEntity<>(campsiteService.reserve(reserveRequest), HttpStatus.OK);
+    }
+
+    @PostMapping(path = "change", produces = "application/json")
+    @ApiOperation(value = "Update or cancel reservation")
+    @ApiResponses(value = {
+            @ApiResponse(code = 200, message = "OK"),
+            @ApiResponse(code = 400, message = "Bad request", response = ServiceError400.class),
+            @ApiResponse(code = 500, message = "Internal server error", response = ServiceError500.class)
+    })
+    public ResponseEntity<ChangeResponse> change(
+            @Valid @RequestBody ChangeRequest changeRequest
+    ) throws ReserveRequestParameterException, InternalServerException {
+        changeRequest.validate();
+        return new ResponseEntity<>(campsiteService.change(changeRequest), HttpStatus.OK);
     }
 }

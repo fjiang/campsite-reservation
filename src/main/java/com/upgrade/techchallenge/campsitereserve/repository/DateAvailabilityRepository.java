@@ -18,4 +18,8 @@ public interface DateAvailabilityRepository extends CrudRepository<DateAvailabil
 
     @Query(value="SELECT da FROM DateAvailability da WHERE campsiteStatus = :status AND date BETWEEN :startDate AND :endDate")
     List<DateAvailability> findDatesBetween(CampsiteStatus status, LocalDate startDate, LocalDate endDate);
+
+    @Query(value="SELECT da FROM DateAvailability da WHERE bookingId = :bookingId")
+    List<DateAvailability> findDatesByBookingId(String bookingId);
+
 }

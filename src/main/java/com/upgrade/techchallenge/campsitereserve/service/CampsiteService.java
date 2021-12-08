@@ -167,7 +167,7 @@ public class CampsiteService {
             dateAvailabilityRepository.saveAllAndFlush(dateAvailabilities);
 
             // Reserve for new schedule
-            if (changeRequest.getChangeReserveOperation() == ChangeReserveOperation.UPDATE) {
+            if (changeRequest.getChangeReserveOperation() == ChangeReserveOperation.CHANGE) {
                 List<DateAvailability> newDateAvailabilities = dateAvailabilityRepository.findDatesBetween(
                         CampsiteStatus.AVAILABLE, changeRequest.getStartDate(), changeRequest.getEndDate());
                 if (newDateAvailabilities.size() - 1 != DAYS.between(changeRequest.getStartDate(), changeRequest.getEndDate())) {

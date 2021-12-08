@@ -3,6 +3,14 @@ Restful API service to manage the island campsite reservations.
 
 3 endpoints are exposed for availability check, campsite reservation and reservation change.
 
+Restriction and rules:
+
+The campsite will be free for all.
+
+The campsite can be reserved for max 3 days.
+
+The campsite can be reserved minimum 1 day(s) ahead of arrival and up to 1 month in advance. Reservations can be cancelled anytime.
+
 
 ## REST API
 The REST API endpoints are described below.

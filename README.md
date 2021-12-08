@@ -1,4 +1,4 @@
-# Island-booking-service
+# Campsite-reservation-service
 Restful API service to manage the island campsite reservations.
 
 3 endpoints are exposed for availability check, campsite reservation and reservation change.

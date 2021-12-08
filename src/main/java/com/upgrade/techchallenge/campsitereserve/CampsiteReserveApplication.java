@@ -29,12 +29,9 @@ public class CampsiteReserveApplication {
 	public CommandLineRunner init(DateAvailabilityRepository dateAvailabilityRepository,
 								  UserRepository userRepository) {
 		return (args) -> {
-			User user = new User("feng", "jiang", "abc.gmail.com");
-			userRepository.save(user);
-
 			List<DateAvailability> dateAvails = new ArrayList<>();
 			for (int i = 1; i <= 30; i++) {
-				dateAvails.add(new DateAvailability(LocalDate.now().plusDays(i), CampsiteStatus.AVAILABLE, user));
+				dateAvails.add(new DateAvailability(LocalDate.now().plusDays(i), CampsiteStatus.AVAILABLE, null));
 			}
 			dateAvailabilityRepository.saveAll(dateAvails);
 

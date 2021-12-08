@@ -3,6 +3,7 @@ package com.upgrade.techchallenge.campsitereserve.dto;
 import com.upgrade.techchallenge.campsitereserve.exception.ReserveRequestParameterException;
 import io.swagger.annotations.ApiModelProperty;
 import lombok.Data;
+import lombok.NoArgsConstructor;
 
 import javax.validation.constraints.Email;
 import javax.validation.constraints.Future;
@@ -13,6 +14,7 @@ import java.util.Map;
 import static java.time.temporal.ChronoUnit.DAYS;
 
 @Data
+@NoArgsConstructor
 public class ReserveRequest {
     @NotNull
     @ApiModelProperty(example = "feng")
@@ -33,6 +35,16 @@ public class ReserveRequest {
     @Future
     @ApiModelProperty(example = "2021-12-15")
     private LocalDate endDate;
+
+
+    public ReserveRequest(@NotNull String firstName, @NotNull String lastName, @Email String email,
+                          @Future LocalDate startDate, @Future LocalDate endDate) {
+        this.firstName = firstName;
+        this.lastName = lastName;
+        this.email = email;
+        this.startDate = startDate;
+        this.endDate = endDate;
+    }
 
     /**
      * Custom validation to check rules for start and end date

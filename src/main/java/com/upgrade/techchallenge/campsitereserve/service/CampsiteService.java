@@ -13,7 +13,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.CollectionUtils;
 
 import java.time.LocalDate;
@@ -74,12 +73,12 @@ public class CampsiteService {
 
     /**
      * Reserve campsite against provided user info and start/end date
+     * Can't use transaction annotation because then it is possible to only flush after unlocked write lock
      * @param reserveRequest includes user info and start/end date
      * @return  Reserve response including booking id if succeeded, or list of errors if failed
      * @throws InternalServerException throw when interrupted or timeout waiting for lock, or
      * other internal errors happened
      */
-    @Transactional
     public ReserveResponse reserve(ReserveRequest reserveRequest)
             throws InternalServerException {
         try {
@@ -92,6 +91,7 @@ public class CampsiteService {
             LocalDate endDate = reserveRequest.getEndDate();
             List<DateAvailability> dateAvailabilities = dateAvailabilityRepository.findDatesBetween(
                     CampsiteStatus.AVAILABLE, startDate, endDate);
+
             if (dateAvailabilities.size() - 1 != DAYS.between(startDate, endDate)) {
                 String errorMessage = "Date has already booked";
                 return new ReserveResponse(
@@ -102,7 +102,7 @@ public class CampsiteService {
                     user = new User(reserveRequest.getFirstName(),
                                     reserveRequest.getLastName(),
                                     reserveRequest.getEmail());
-                    userRepository.save(user);
+                    userRepository.saveAndFlush(user);
                 }
                 String trackId = reserve(dateAvailabilities, user);
                 return new ReserveResponse(
@@ -111,6 +111,8 @@ public class CampsiteService {
         } catch (InterruptedException ex) {
             String innerErrorMessage = String.format("Interrupted reserving campsite - [%s]", reserveRequest);
             throw new InternalServerException("Interrupted reserving campsite", innerErrorMessage);
+        } catch (InternalServerException ex) {
+            throw ex;
         } catch (Exception ex) {
             String errorMessage = "Encountered internal error";
             throw new InternalServerException(errorMessage, errorMessage);
@@ -127,14 +129,7 @@ public class CampsiteService {
             dateAvailability.setUser(user);
             dateAvailability.setBookingId(bookingId);
         }
-        dateAvailabilityRepository.saveAll(dateAvailabilities);
-
-        logger.info("User info found with findByAvailability()");
-        logger.info("-----------------------------------------");
-        for (DateAvailability dateAvailabilityFetched : dateAvailabilityRepository.findAll()) {
-            logger.info(dateAvailabilityFetched.toString());
-        }
-        logger.info("");
+        dateAvailabilityRepository.saveAllAndFlush(dateAvailabilities);
         return bookingId;
     }
 
@@ -144,15 +139,13 @@ public class CampsiteService {
      * @return ChangeResponse including processing status and errors if failed, new booking id if succeeded
      * @throws InternalServerException when timeout or interrupted waiting for lock or other internal error happens
      */
-    @Transactional
     public ChangeResponse change(ChangeRequest changeRequest)
             throws InternalServerException {
         try {
             boolean acquired = lock.writeLock().tryLock(5000, TimeUnit.MILLISECONDS);
             if (!acquired) {
-                String errorMessage = String.format("Timeout changing reservation - [%s]", changeRequest);
-                logger.error(errorMessage);
-                throw new InternalServerException("Timeout changing reservation");
+                String innerErrorMessage = String.format("Timeout changing reservation - [%s]", changeRequest);
+                throw new InternalServerException("Timeout changing reservation",innerErrorMessage);
             }
 
             // Look for reservation by booking id
@@ -171,7 +164,7 @@ public class CampsiteService {
                 dateAvailability.setCampsiteStatus(CampsiteStatus.AVAILABLE);
                 dateAvailability.setBookingId(null);
             }
-            dateAvailabilityRepository.saveAll(dateAvailabilities);
+            dateAvailabilityRepository.saveAllAndFlush(dateAvailabilities);
 
             // Reserve for new schedule
             if (changeRequest.getChangeReserveOperation() == ChangeReserveOperation.UPDATE) {
@@ -193,6 +186,8 @@ public class CampsiteService {
         } catch (InterruptedException ex) {
             String innerErrorMessage = String.format("Interrupted changing reservation - [%s]", changeRequest);
             throw new InternalServerException("Interrupted changing reservation", innerErrorMessage);
+        } catch (InternalServerException ex) {
+            throw ex;
         } catch (Exception ex) {
             String errorMessage = "Encountered internal error";
             throw new InternalServerException(errorMessage, errorMessage);

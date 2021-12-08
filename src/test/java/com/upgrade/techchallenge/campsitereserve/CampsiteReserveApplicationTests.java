@@ -1,10 +1,7 @@
 package com.upgrade.techchallenge.campsitereserve;
 
 import com.upgrade.techchallenge.campsitereserve.controller.ReserveController;
-import com.upgrade.techchallenge.campsitereserve.dto.CampsiteAvailability;
-import com.upgrade.techchallenge.campsitereserve.dto.ProcessingStatus;
-import com.upgrade.techchallenge.campsitereserve.dto.ReserveRequest;
-import com.upgrade.techchallenge.campsitereserve.dto.ReserveResponse;
+import com.upgrade.techchallenge.campsitereserve.dto.*;
 import com.upgrade.techchallenge.campsitereserve.error.ErrorCode;
 import com.upgrade.techchallenge.campsitereserve.error.ServiceError400;
 import org.junit.jupiter.api.*;
@@ -90,6 +87,31 @@ class CampsiteReserveApplicationTests {
 
     @Test
     @Order(5)
+    void reserveWithQualifiedDateRangeThenCancelShouldSucceed() {
+        LocalDate startDate = LocalDate.now().plusDays(1);
+        LocalDate endDate = LocalDate.now().plusDays(3);
+        ReserveRequest reserveRequest = new ReserveRequest("feng", "jiang", "fjiang@upgrade.com",
+                startDate, endDate);
+        ResponseEntity<ReserveResponse> updateResponse = restTemplate.exchange(
+                "http://localhost:" + port + "/campsite/reserve", HttpMethod.POST,
+                new HttpEntity<>(reserveRequest), ReserveResponse.class);
+        assertThat(updateResponse.getStatusCode()).isEqualByComparingTo(HttpStatus.OK);
+        assertThat(updateResponse.getBody()).isNotNull();
+        assertThat(updateResponse.getBody().getProcessingStatus()).isEqualByComparingTo(ProcessingStatus.SUCCEEDED);
+        assertThat(updateResponse.getBody().getBookingId()).isNotEmpty();
+
+        ChangeRequest changeRequest = new ChangeRequest(
+                ChangeReserveOperation.CANCEL, updateResponse.getBody().getBookingId(), null, null);
+        ResponseEntity<ChangeResponse> changeResponse = restTemplate.exchange(
+                "http://localhost:" + port + "/campsite/change", HttpMethod.POST,
+                new HttpEntity<>(changeRequest), ChangeResponse.class);
+        assertThat(changeResponse.getStatusCode()).isEqualByComparingTo(HttpStatus.OK);
+        assertThat(changeResponse.getBody()).isNotNull();
+        assertThat(changeResponse.getBody().getProcessingStatus()).isEqualByComparingTo(ProcessingStatus.SUCCEEDED);
+    }
+
+    @Test
+    @Order(7)
     void multipleReserveWithOverLappedDateShouldHaveOneSucceedAndOthersFail() {
         LocalDate startDate = LocalDate.now().plusDays(1);
         LocalDate endDate = LocalDate.now().plusDays(3);

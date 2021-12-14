@@ -111,7 +111,7 @@ class CampsiteReserveApplicationTests {
 
     @Test
     @Order(6)
-    void reserveWithQualifiedDateRangeThenChangeShouldSucceed() {
+    void reserveWithQualifiedDateRangeThenChangeThenRetrieveShouldSucceed() {
         LocalDate startDate = LocalDate.now().plusDays(1);
         LocalDate endDate = LocalDate.now().plusDays(3);
         ReserveRequest reserveRequest = new ReserveRequest("feng", "jiang", "fjiang@upgrade.com",
@@ -132,6 +132,13 @@ class CampsiteReserveApplicationTests {
         assertThat(changeResponse.getStatusCode()).isEqualByComparingTo(HttpStatus.OK);
         assertThat(changeResponse.getBody()).isNotNull();
         assertThat(changeResponse.getBody().getProcessingStatus()).isEqualByComparingTo(ProcessingStatus.SUCCEEDED);
+
+        ResponseEntity<RetrieveResponse> retrieveResponse = restTemplate.getForEntity(
+                "http://localhost:" + port + "/campsite/retrieve?bookingId=" + changeResponse.getBody().getTrackId(), RetrieveResponse.class);
+        assertThat(retrieveResponse.getStatusCode()).isEqualByComparingTo(HttpStatus.OK);
+        assertThat(retrieveResponse.getBody()).isNotNull();
+        assertThat(retrieveResponse.getBody().getStartDate().isEqual(changeRequest.getStartDate()));
+        assertThat(retrieveResponse.getBody().getEndDate().isEqual(changeRequest.getEndDate()));
 
         // Cancel reservation
         cancel(changeResponse.getBody().getTrackId());

@@ -194,7 +194,6 @@ public class CampsiteService {
      * Use transactionTemplate to programmatically control transaction instead.
      * @param changeRequest including booking id and change operation and start/end date if update
      * @return ChangeResponse including processing status and errors if failed, new booking id if succeeded
-     * @throws InternalServerException when timeout or interrupted waiting for lock or other internal error happens
      */
     public ChangeResponse change(ChangeRequest changeRequest) {
         try {
@@ -214,6 +213,7 @@ public class CampsiteService {
             } else {
                 return transactionTemplate.execute( status -> {
                     try {
+                        User user = dateAvailabilities.get(0).getUser();
                         cancelReservation(dateAvailabilities);
                         List<DateAvailability> newDateAvailabilities = dateAvailabilityRepository.findDatesBetween(
                                 CampsiteStatus.AVAILABLE, changeRequest.getStartDate(), changeRequest.getEndDate());
@@ -224,7 +224,6 @@ public class CampsiteService {
                             return new ChangeResponse(
                                     ProcessingStatus.FAILED, List.of(new ServiceError400(errorMessage)), null);
                         } else {
-                            User user = dateAvailabilities.get(0).getUser();
                             ReserveResponse reserveResponse = reserve(newDateAvailabilities, user);
                             if (reserveResponse.getProcessingStatus() == ProcessingStatus.SUCCEEDED) {
                                 return new ChangeResponse(
@@ -279,7 +278,7 @@ public class CampsiteService {
 
     /**
      * Retrieve reservation dates by booking id
-     * @param bookingId
+     * @param bookingId booking id to retrieve reservation against
      * @return Response contains start and end dates together with user info
      */
     public RetrieveResponse retrieve(String bookingId) throws InternalServerException {
@@ -299,7 +298,6 @@ public class CampsiteService {
             }
         } catch (Exception ex) {
             throw new InternalServerException("Encountered internal server error", ex.getMessage());
-
         }
 
     }

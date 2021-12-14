@@ -10,7 +10,7 @@ public class DateAvailabilityRequest {
     private LocalDate endDate;
 
     public DateAvailabilityRequest() {
-        this.startDate = LocalDate.now();
+        this.startDate = LocalDate.now().plusDays(1);
         this.endDate = LocalDate.now().plusDays(30);
     }
 

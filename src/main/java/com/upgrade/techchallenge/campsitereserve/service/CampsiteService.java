@@ -5,6 +5,7 @@ import com.upgrade.techchallenge.campsitereserve.domain.DateAvailability;
 import com.upgrade.techchallenge.campsitereserve.domain.User;
 import com.upgrade.techchallenge.campsitereserve.dto.*;
 import com.upgrade.techchallenge.campsitereserve.error.ServiceError400;
+import com.upgrade.techchallenge.campsitereserve.error.ServiceError500;
 import com.upgrade.techchallenge.campsitereserve.exception.InternalServerException;
 import com.upgrade.techchallenge.campsitereserve.repository.DateAvailabilityRepository;
 import com.upgrade.techchallenge.campsitereserve.repository.UserRepository;
@@ -19,6 +20,7 @@ import org.springframework.util.CollectionUtils;
 
 import javax.annotation.PostConstruct;
 import java.time.LocalDate;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.ReadWriteLock;
@@ -46,11 +48,14 @@ public class CampsiteService {
 
     private TransactionTemplate transactionTemplate;
 
-    private final ReadWriteLock lock = new ReentrantReadWriteLock();
+    private final ReadWriteLock[] locks = new ReadWriteLock[30];
 
     @PostConstruct
     public void initialize() {
         transactionTemplate = new TransactionTemplate(platformTransactionManager);
+        for (int i = 0; i < locks.length; i++) {
+            locks[i] = new ReentrantReadWriteLock();
+        }
     }
 
     /**
@@ -62,15 +67,23 @@ public class CampsiteService {
     public List<LocalDate> getAvailable(DateAvailabilityRequest request)
             throws InternalServerException {
         List<DateAvailability> campsiteAvailabilities;
+        List<ReadWriteLock> acquiredLocks = new LinkedList<>();
         try {
-            boolean acquired = lock.readLock().tryLock(2000, TimeUnit.MILLISECONDS);
-            if (!acquired) {
-                String errorMessage = "Timeout acquiring available dates";
-                logger.error(errorMessage);
-                throw new InternalServerException(errorMessage);
-            }
             LocalDate startDate = request.getStartDate();
             LocalDate endDate = request.getEndDate();
+            int firstLockIdx = Long.valueOf(DAYS.between(LocalDate.now().plusDays(1), startDate)).intValue();
+            int lastLockIdx = Long.valueOf(DAYS.between(LocalDate.now().plusDays(1), endDate)).intValue();
+
+            for (int i = firstLockIdx; i <= lastLockIdx; i++) {
+                boolean acquired = locks[i].readLock().tryLock(2000, TimeUnit.MILLISECONDS);
+                if (!acquired) {
+                    String errorMessage = "Timeout acquiring available dates";
+                    logger.error(errorMessage);
+                    throw new InternalServerException(errorMessage);
+                } else {
+                    acquiredLocks.add(locks[i]);
+                }
+            }
             campsiteAvailabilities =
                     dateAvailabilityRepository.findDatesBetween(CampsiteStatus.AVAILABLE, startDate, endDate);
         } catch (InterruptedException ex) {
@@ -78,7 +91,7 @@ public class CampsiteService {
             logger.error(errorMessage, ex);
             throw new InternalServerException(errorMessage);
         } finally {
-            lock.readLock().unlock();
+            acquiredLocks.forEach(lock -> lock.readLock().unlock());
         }
 
         return campsiteAvailabilities.stream().map(DateAvailability::getDate).collect(Collectors.toList());
@@ -95,14 +108,23 @@ public class CampsiteService {
      */
     public ReserveResponse reserve(ReserveRequest reserveRequest)
             throws InternalServerException {
+        List<ReadWriteLock> acquiredLocks = new LinkedList<>();
         try {
-            boolean acquired = lock.writeLock().tryLock(5000, TimeUnit.MILLISECONDS);
-            if (!acquired) {
-                String innerMessage = String.format("Timeout reserving campsite - [%s]", reserveRequest);
-                throw new InternalServerException("Timeout reserving campsite", innerMessage);
-            }
             LocalDate startDate = reserveRequest.getStartDate();
             LocalDate endDate = reserveRequest.getEndDate();
+            int firstLockIdx = Long.valueOf(DAYS.between( LocalDate.now().plusDays(1), startDate)).intValue();
+            int lastLockIdx = Long.valueOf(DAYS.between(LocalDate.now().plusDays(1), endDate)).intValue();
+
+            for (int i = firstLockIdx; i <= lastLockIdx; i++) {
+                boolean acquired = locks[i].writeLock().tryLock(5000, TimeUnit.MILLISECONDS);
+                if (!acquired) {
+                    String innerMessage = String.format("Timeout reserving campsite - [%s]", reserveRequest);
+                    throw new InternalServerException("Timeout reserving campsite", innerMessage);
+                } else {
+                    acquiredLocks.add(locks[i]);
+                }
+            }
+
             List<DateAvailability> dateAvailabilities = dateAvailabilityRepository.findDatesBetween(
                     CampsiteStatus.AVAILABLE, startDate, endDate);
 
@@ -111,41 +133,59 @@ public class CampsiteService {
                 return new ReserveResponse(
                         ProcessingStatus.FAILED, List.of(new ServiceError400(errorMessage)), null);
             } else {
-                String trackId = transactionTemplate.execute( status -> {
-                    User user = userRepository.findOneByEmail(reserveRequest.getEmail());
-                    if (user == null) {
-                        user = new User(reserveRequest.getFirstName(),
-                                        reserveRequest.getLastName(),
-                                        reserveRequest.getEmail());
-                        userRepository.save(user);
-                    }
-                    return reserve(dateAvailabilities, user);
+                return transactionTemplate.execute( status -> {
+                        User user = userRepository.findOneByEmail(reserveRequest.getEmail());
+                        if (user == null) {
+                            user = new User(reserveRequest.getFirstName(),
+                                    reserveRequest.getLastName(),
+                                    reserveRequest.getEmail());
+                            userRepository.save(user);
+                        }
+                        return reserve(dateAvailabilities, user);
+
                 });
-                return new ReserveResponse(ProcessingStatus.SUCCEEDED, null, trackId);
             }
         } catch (InterruptedException ex) {
             String innerErrorMessage = String.format("Interrupted reserving campsite - [%s]", reserveRequest);
             throw new InternalServerException("Interrupted reserving campsite", innerErrorMessage);
-        } catch (InternalServerException ex) {
-            throw ex;
         } catch (Exception ex) {
             String errorMessage = "Encountered internal error";
-            throw new InternalServerException(errorMessage, errorMessage);
+            throw new InternalServerException(errorMessage, ex.getMessage());
         } finally {
-            lock.writeLock().unlock();
+            acquiredLocks.forEach(lock -> lock.writeLock().unlock());
         }
     }
 
-    private String reserve(List<DateAvailability> dateAvailabilities, User user) {
+    private ReserveResponse reserve(List<DateAvailability> dateAvailabilities, User user) {
         String bookingId = TrackIdGenerator.generateTrackId();
-
-        for (DateAvailability dateAvailability : dateAvailabilities) {
-            dateAvailability.setCampsiteStatus(CampsiteStatus.RESERVED);
-            dateAvailability.setUser(user);
-            dateAvailability.setBookingId(bookingId);
+        List<ReadWriteLock> acquiredLocks = new LinkedList<>();
+        LocalDate startDate = dateAvailabilities.get(0).getDate();
+        LocalDate endDate = dateAvailabilities.get(dateAvailabilities.size() - 1).getDate();
+        int firstLockIdx = Long.valueOf(DAYS.between(LocalDate.now().plusDays(1), startDate)).intValue();
+        int lastLockIdx = Long.valueOf(DAYS.between(LocalDate.now().plusDays(1), endDate)).intValue();
+        try {
+            for (int i = firstLockIdx; i <= lastLockIdx; i++) {
+                boolean acquired = locks[i].writeLock().tryLock(5000, TimeUnit.MILLISECONDS);
+                if (!acquired) {
+                    String errorMessage = String.format("Timeout reserve campsite - between [%s] and [%s]",startDate, endDate);
+                    return new ReserveResponse(ProcessingStatus.FAILED, List.of(new ServiceError500(errorMessage)), null);
+                } else {
+                    acquiredLocks.add(locks[i]);
+                }
+            }
+            for (DateAvailability dateAvailability : dateAvailabilities) {
+                dateAvailability.setCampsiteStatus(CampsiteStatus.RESERVED);
+                dateAvailability.setUser(user);
+                dateAvailability.setBookingId(bookingId);
+            }
+            dateAvailabilityRepository.saveAll(dateAvailabilities);
+            return new ReserveResponse(ProcessingStatus.SUCCEEDED, null, bookingId);
+        } catch (InterruptedException ex) {
+            String errorMessage = String.format("Timeout reserve campsite - between [%s] and [%s]",startDate, endDate);
+            return new ReserveResponse(ProcessingStatus.FAILED, List.of(new ServiceError500(errorMessage)), null);
+        } finally {
+            acquiredLocks.forEach(lock -> lock.writeLock().unlock());
         }
-        dateAvailabilityRepository.saveAll(dateAvailabilities);
-        return bookingId;
     }
 
     /**
@@ -156,15 +196,8 @@ public class CampsiteService {
      * @return ChangeResponse including processing status and errors if failed, new booking id if succeeded
      * @throws InternalServerException when timeout or interrupted waiting for lock or other internal error happens
      */
-    public ChangeResponse change(ChangeRequest changeRequest)
-            throws InternalServerException {
+    public ChangeResponse change(ChangeRequest changeRequest) {
         try {
-            boolean acquired = lock.writeLock().tryLock(5000, TimeUnit.MILLISECONDS);
-            if (!acquired) {
-                String innerErrorMessage = String.format("Timeout changing reservation - [%s]", changeRequest);
-                throw new InternalServerException("Timeout changing reservation",innerErrorMessage);
-            }
-
             // Look for reservation by booking id
             List<DateAvailability> dateAvailabilities =
                     dateAvailabilityRepository.findDatesByBookingId(changeRequest.getBookingId());
@@ -180,41 +213,94 @@ public class CampsiteService {
                         ProcessingStatus.SUCCEEDED, null, null);
             } else {
                 return transactionTemplate.execute( status -> {
-                    cancelReservation(dateAvailabilities);
-                    List<DateAvailability> newDateAvailabilities = dateAvailabilityRepository.findDatesBetween(
-                            CampsiteStatus.AVAILABLE, changeRequest.getStartDate(), changeRequest.getEndDate());
-                    if (newDateAvailabilities.size() - 1 != DAYS.between(changeRequest.getStartDate(), changeRequest.getEndDate())) {
-                        String errorMessage = "Date has already booked";
+                    try {
+                        cancelReservation(dateAvailabilities);
+                        List<DateAvailability> newDateAvailabilities = dateAvailabilityRepository.findDatesBetween(
+                                CampsiteStatus.AVAILABLE, changeRequest.getStartDate(), changeRequest.getEndDate());
+                        if (newDateAvailabilities.size() - 1 != DAYS.between(changeRequest.getStartDate(), changeRequest.getEndDate())) {
+                            // Roll back cancel reservation
+                            status.setRollbackOnly();
+                            String errorMessage = "Date has already booked";
+                            return new ChangeResponse(
+                                    ProcessingStatus.FAILED, List.of(new ServiceError400(errorMessage)), null);
+                        } else {
+                            User user = dateAvailabilities.get(0).getUser();
+                            ReserveResponse reserveResponse = reserve(newDateAvailabilities, user);
+                            if (reserveResponse.getProcessingStatus() == ProcessingStatus.SUCCEEDED) {
+                                return new ChangeResponse(
+                                        ProcessingStatus.SUCCEEDED, null, reserveResponse.getBookingId());
+                            } else {
+                                return new ChangeResponse(ProcessingStatus.FAILED, reserveResponse.getErrors(), null);
+                            }
+                        }
+                    } catch (Exception ex) {
+                        status.setRollbackOnly();
                         return new ChangeResponse(
-                                ProcessingStatus.FAILED, List.of(new ServiceError400(errorMessage)), null);
-                    } else {
-                        User user = dateAvailabilities.get(0).getUser();
-                        String bookingId = reserve(newDateAvailabilities, user);
-                        return new ChangeResponse(
-                                ProcessingStatus.SUCCEEDED, null, bookingId);
+                                ProcessingStatus.FAILED, List.of(new ServiceError500("Encountered internal error")), null);
                     }
                 });
             }
-        } catch (InterruptedException ex) {
-            String innerErrorMessage = String.format("Interrupted changing reservation - [%s]", changeRequest);
-            throw new InternalServerException("Interrupted changing reservation", innerErrorMessage);
-        } catch (InternalServerException ex) {
-            throw ex;
         } catch (Exception ex) {
-            String errorMessage = "Encountered internal error";
-            throw new InternalServerException(errorMessage, errorMessage);
-        } finally {
-            lock.writeLock().unlock();
+            return new ChangeResponse(
+                    ProcessingStatus.FAILED, List.of(new ServiceError500("Encountered internal error")), null);
         }
     }
 
-    private void cancelReservation(List<DateAvailability> dateAvailabilities) {
-        // Cancel previous reservation
-        for (DateAvailability dateAvailability : dateAvailabilities) {
-            dateAvailability.setUser(null);
-            dateAvailability.setCampsiteStatus(CampsiteStatus.AVAILABLE);
-            dateAvailability.setBookingId(null);
+    private void cancelReservation(List<DateAvailability> dateAvailabilities) throws InternalServerException {
+        List<ReadWriteLock> acquiredLocks = new LinkedList<>();
+        LocalDate startDate = dateAvailabilities.get(0).getDate();
+        LocalDate endDate = dateAvailabilities.get(dateAvailabilities.size() - 1).getDate();
+        int firstLockIdx = Long.valueOf(DAYS.between(LocalDate.now().plusDays(1), startDate)).intValue();
+        int lastLockIdx = Long.valueOf(DAYS.between(LocalDate.now().plusDays(1), endDate)).intValue();
+        try {
+            for (int i = firstLockIdx; i <= lastLockIdx; i++) {
+                boolean acquired = locks[i].writeLock().tryLock(5000, TimeUnit.MILLISECONDS);
+                if (!acquired) {
+                    String innerErrorMessage = String.format("Timeout cancel reservation - between [%s] and [%s]",startDate, endDate);
+                    throw new InternalServerException("Timeout cancel reservation", innerErrorMessage);
+                } else {
+                    acquiredLocks.add(locks[i]);
+                }
+            }
+            // Cancel previous reservation
+            for (DateAvailability dateAvailability : dateAvailabilities) {
+                dateAvailability.setUser(null);
+                dateAvailability.setCampsiteStatus(CampsiteStatus.AVAILABLE);
+                dateAvailability.setBookingId(null);
+            }
+            dateAvailabilityRepository.saveAll(dateAvailabilities);
+        } catch (InterruptedException ex) {
+            String innerErrorMessage = String.format("Timeout cancel reservation - between [%s] and [%s]",startDate, endDate);
+            throw new InternalServerException("Timeout cancel reservation", innerErrorMessage);
+        } finally {
+            acquiredLocks.forEach(lock -> lock.writeLock().unlock());
         }
-        dateAvailabilityRepository.saveAll(dateAvailabilities);
+    }
+
+    /**
+     * Retrieve reservation dates by booking id
+     * @param bookingId
+     * @return Response contains start and end dates together with user info
+     */
+    public RetrieveResponse retrieve(String bookingId) throws InternalServerException {
+        try {
+            List<DateAvailability> dateAvailabilities =
+                    dateAvailabilityRepository.findDatesByBookingId(bookingId);
+            if (CollectionUtils.isEmpty(dateAvailabilities)) {
+                String errorMessage = String.format("Can't find reservation by booking id %s", bookingId);
+                return new RetrieveResponse(
+                        ProcessingStatus.FAILED, List.of(new ServiceError400(errorMessage)));
+            } else {
+                LocalDate startDate = dateAvailabilities.get(0).getDate();
+                LocalDate endDate = dateAvailabilities.get(dateAvailabilities.size() - 1).getDate();
+                User user = dateAvailabilities.get(0).getUser();
+                return new RetrieveResponse(ProcessingStatus.SUCCEEDED, null,
+                        startDate, endDate, user.getFirstName(), user.getLastName(), user.getEmail());
+            }
+        } catch (Exception ex) {
+            throw new InternalServerException("Encountered internal server error", ex.getMessage());
+
+        }
+
     }
 }

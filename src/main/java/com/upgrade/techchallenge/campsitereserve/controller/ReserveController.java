@@ -71,6 +71,23 @@ public class ReserveController {
         return new ResponseEntity<>(campsiteService.reserve(reserveRequest), HttpStatus.OK);
     }
 
+    @GetMapping(path = "retrieve", produces = "application/json")
+    @ApiOperation(value = "Retrieve reservation by booking id")
+    @ApiResponses(value = {
+            @ApiResponse(code = 200, message = "OK"),
+            @ApiResponse(code = 400, message = "Bad request", response = ServiceError400.class),
+            @ApiResponse(code = 500, message = "Internal server error", response = ServiceError500.class)
+    })
+    public ResponseEntity<RetrieveResponse> retrieve(
+            @ApiParam(
+                    name = "bookingId",
+                    type = "String",
+                    value = "booking id",
+                    example = "84c6894ecb6e4ef18bb1e68aa10bc8a5")
+            @RequestParam(value="bookingId") String bookingId) throws InternalServerException {
+        return new ResponseEntity<>(campsiteService.retrieve(bookingId), HttpStatus.OK);
+    }
+
     @PostMapping(path = "change", produces = "application/json")
     @ApiOperation(value = "Update or cancel reservation")
     @ApiResponses(value = {

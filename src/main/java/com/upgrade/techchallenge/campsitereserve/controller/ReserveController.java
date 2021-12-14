@@ -49,10 +49,11 @@ public class ReserveController {
                     value = "end date",
                     example = "2021-12-15")
             @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) @RequestParam(value="endDate", required=false) LocalDate endDate
-    ) throws InternalServerException {
+    ) throws InternalServerException, ReserveRequestParameterException {
         DateAvailabilityRequest dateAvailabilityRequest = new DateAvailabilityRequest();
         if (startDate != null) dateAvailabilityRequest.setStartDate(startDate);
         if (endDate != null) dateAvailabilityRequest.setEndDate(endDate);
+        dateAvailabilityRequest.validate();
         List<LocalDate> availList = campsiteService.getAvailable(dateAvailabilityRequest);
         return new ResponseEntity<>(new CampsiteAvailability(availList), HttpStatus.OK);
     }
@@ -97,7 +98,7 @@ public class ReserveController {
     })
     public ResponseEntity<ChangeResponse> change(
             @Valid @RequestBody ChangeRequest changeRequest
-    ) throws ReserveRequestParameterException, InternalServerException {
+    ) throws ReserveRequestParameterException {
         changeRequest.validate();
         return new ResponseEntity<>(campsiteService.change(changeRequest), HttpStatus.OK);
     }
